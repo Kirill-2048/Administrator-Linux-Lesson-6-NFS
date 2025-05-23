@@ -1,1 +1,81 @@
 Administrator-Linux-Lesson-6-NFS
+
+Статический адрес NFS-сервер 192.168.1.254/24 (netplan)
+Статический адрес NFS-клиент 192.168.1.253/24 (netplan)
+
+Настройка NFS-сервера:
+root@ubuntu:~# apt install nfs-kernel-server
+
+Проверка слушающих портов
+root@ubuntu:~# ss -tnplu | grep 2049
+tcp   LISTEN 0      64           0.0.0.0:2049       0.0.0.0:*
+tcp   LISTEN 0      64              [::]:2049          [::]:*
+root@ubuntu:~# ss -tnplu | grep 111
+udp   UNCONN 0      0            0.0.0.0:111        0.0.0.0:*    users:(("rpcbind",pid=640,fd=5),("systemd",pid=1,fd=40))
+udp   UNCONN 0      0               [::]:111           [::]:*    users:(("rpcbind",pid=640,fd=7),("systemd",pid=1,fd=42))
+tcp   LISTEN 0      4096         0.0.0.0:111        0.0.0.0:*    users:(("rpcbind",pid=640,fd=4),("systemd",pid=1,fd=39))
+tcp   LISTEN 0      4096            [::]:111           [::]:*    users:(("rpcbind",pid=640,fd=6),("systemd",pid=1,fd=41))
+
+Настройка директории
+root@ubuntu:~# mkdir -p /srv/share/upload
+root@ubuntu:~# chown -R nobody:nogroup /srv/share
+root@ubuntu:~# chmod 0777 /srv/share/upload
+
+Экспортирование директории
+root@ubuntu:~# nano /etc/exports
+Добавление строчки в /etc/exports:
+/srv/share 192.168.1.253/32(rw,sync,root_squash)
+
+root@ubuntu:~# exportfs -r
+exportfs: /etc/exports [1]: Neither 'subtree_check' or 'no_subtree_check' specified for export "192.168.1.253/32:/srv/share".
+  Assuming default behaviour ('no_subtree_check').
+  NOTE: this default has changed since nfs-utils version 1.0.x
+
+root@ubuntu:~# exportfs -s
+/srv/share  192.168.1.253/32(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,root_squash,no_all_squash)
+root@ubuntu:~#
+Сервер NFS настроен
+
+Настройка NFS-клиента
+root@ubuntu:~# apt install nfs-common
+root@ubuntu:~# echo "192.168.1.254:/srv/share/ /mnt nfs vers=3,noauto,x-systemd.automount 0 0" >> /etc/fstab
+root@ubuntu:~#
+root@ubuntu:~# systemctl daemon-reload
+root@ubuntu:~#
+root@ubuntu:~# systemctl restart remote-fs.target
+root@ubuntu:~#
+
+Проверка монтирования
+root@ubuntu:~# mount | grep mnt
+systemd-1 on /mnt type autofs (rw,relatime,fd=65,pgrp=1,timeout=0,minproto=5,maxproto=5,direct,pipe_ino=15639)
+root@ubuntu:~#
+
+Проверка работоспособности
+Пинг с клиента на сервер успешный.
+Заходим на сервер в каталог /srv/share/upload.
+Создаём тестовый файл touch server_file
+badger@ubuntu:~$ cd /srv/share/upload
+badger@ubuntu:/srv/share/upload$ touch server_file
+badger@ubuntu:/srv/share/upload$
+
+Заходим на клиент в каталог /mnt/upload. 
+Проверяем наличие ранее созданного файла.
+root@ubuntu:~# cd /mnt/upload
+root@ubuntu:/mnt/upload#
+root@ubuntu:/mnt/upload# ls
+server_file
+root@ubuntu:/mnt/upload#
+Файл присутствует в каталоге.
+
+Создаём тестовый файл touch client_file на клиенте.
+root@ubuntu:/mnt/upload# touch client_file
+root@ubuntu:/mnt/upload#
+
+Проверяем наличие файла на сервере.
+badger@ubuntu:/srv/share/upload$ ls
+client_file  server_file
+badger@ubuntu:/srv/share/upload$
+Файл присутствует в каталоге.
+
+После перезагрузки сервера и клиента файлы остаются в каталоге.
+Проверка завершена успешно.
